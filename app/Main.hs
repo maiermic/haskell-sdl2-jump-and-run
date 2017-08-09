@@ -1,8 +1,10 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import Control.Monad (when)
+import Control.Monad (when, unless)
 import Control.Concurrent (threadDelay)
+import Data.Maybe (mapMaybe)
 import Foreign.C.Types (CInt)
 import SDL.Vect (V2(..), V4(..))
 import SDL (($=))
@@ -10,6 +12,31 @@ import qualified SDL
 
 screenWidth, screenHeight :: CInt
 (screenWidth, screenHeight) = (1280, 720)
+
+data Input
+  = None
+  | MoveLeft
+  | MoveRight
+  | Jump
+  | Restart
+  | Quit
+  deriving (Eq)
+
+toInput :: SDL.Keycode -> Input
+toInput = \case
+  SDL.KeycodeA -> MoveLeft
+  SDL.KeycodeD -> MoveRight
+  SDL.KeycodeSpace -> Jump
+  SDL.KeycodeR -> Restart
+  SDL.KeycodeQ -> Quit
+  _ -> None
+
+isPressedKey :: SDL.KeyboardEventData -> Bool
+isPressedKey eventData = SDL.Pressed == SDL.keyboardEventKeyMotion eventData
+
+toPressedKey :: SDL.EventPayload -> Maybe SDL.Keycode
+toPressedKey (SDL.KeyboardEvent e) | isPressedKey e = Just $ SDL.keysymKeycode $ SDL.keyboardEventKeysym e
+toPressedKey _ = Nothing
 
 main :: IO ()
 main = do
@@ -39,10 +66,18 @@ main = do
           }
   SDL.rendererDrawColor renderer $= V4 110 132 174 maxBound
 
-  SDL.clear renderer
-  SDL.present renderer
+  let
+    loop = do
+      events <- map SDL.eventPayload <$> SDL.pollEvents
+      let pressedKeys = mapMaybe toPressedKey events
+      let inputs = map toInput pressedKeys
 
-  threadDelay 2000000
+      SDL.clear renderer
+      SDL.present renderer
+
+      let quit = (SDL.QuitEvent `elem` events) || (Quit `elem` inputs)
+      unless quit loop
+  loop
 
   SDL.destroyRenderer renderer
   SDL.destroyWindow window
