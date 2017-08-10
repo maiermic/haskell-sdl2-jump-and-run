@@ -13,6 +13,9 @@ build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10
 
+data-files:
+  assets/*.png
+
 library
   hs-source-dirs:      src
   exposed-modules:     Lib
@@ -26,6 +29,7 @@ executable sdl2-jump-and-run-exe
   build-depends:       base
                      , sdl2-jump-and-run
                      , sdl2
+                     , sdl2-image
   default-language:    Haskell2010
 
 test-suite sdl2-jump-and-run-test
