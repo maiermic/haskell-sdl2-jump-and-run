@@ -1,8 +1,11 @@
+{-# LANGUAGE DisambiguateRecordFields #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
+import Debug.Trace (trace)
 import Control.Monad (when, unless)
 import Control.Concurrent (threadDelay)
 import Data.Maybe (mapMaybe)
@@ -38,6 +41,13 @@ data Input
   | Quit
   deriving (Eq)
 
+data TileMap = TileMap
+  { texture :: !SDL.Texture
+  , width :: !Int
+  , height :: !Int
+  , tiles :: ![Int]
+  }
+
 data Player = Player
   { texture :: !SDL.Texture
   , position :: !Point2d
@@ -52,10 +62,11 @@ createPlayer t = Player
   }
 
 restartPlayer :: Player -> Player
-restartPlayer p = createPlayer $ texture p
+restartPlayer p = createPlayer $ texture (p :: Player)
 
 data Game = Game
   { player :: !Player
+  , tileMap :: !TileMap
   , camera :: !Vector2d
   }
 
@@ -150,6 +161,48 @@ renderTee renderer texture position =
   in
     mapM copy bodyParts
 
+defaultMap =
+  [  0,  0,  0,  0, 78,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+     4,  5,  0,  0, 78,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    20, 21,  0,  0, 78,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    20, 21,  0,  0, 78,  0,  0,  0,  0,  0,  0,  0,  0,  4,  5,
+    20, 21,  0,  0, 78,  0,  0,  0,  0,  0,  0,  0,  0, 20, 21,
+    20, 21,  0,  0, 78,  0,  0,  0,  0,  0,  0,  0,  0, 20, 21,
+    20, 21,  0,  0, 78,  0,  0,  4,  5,  0,  0,  0,  0, 20, 21,
+    20, 21,  0,  0, 78,  0,  0, 20, 21,  0,  0,  0,  0, 20, 21,
+    20, 38,  0,  0, 78,  0,  0, 22, 38,  0,  0,  0,  0, 22, 38,
+    20, 49, 16, 16, 16, 16, 16, 48, 49, 16, 16, 16, 16, 48, 49,
+    36, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52
+  ]
+
+xCoordinates :: Int -> Int -> [Int]
+xCoordinates columns rows = take (rows * columns) $ cycle [0..(columns - 1)]
+
+yCoordinates :: Int -> Int -> [Int]
+yCoordinates columns rows = concat $ map (take columns . repeat) [0..(rows - 1)]
+
+renderTileMap :: SDL.Renderer -> TileMap -> Vector2d -> IO [()]
+renderTileMap renderer (TileMap {texture, tiles, width, height}) (V2 cameraX cameraY) =
+  let
+    tilesPerRow = 16
+    tileWidth = 64 :: CInt
+    tileHeight = 64 :: CInt
+    xCoordinates' = map fromIntegral $ xCoordinates width height
+    yCoordinates' = map fromIntegral $ yCoordinates width height
+    tile x y = SDL.Rectangle (p2 x y) (V2 tileWidth tileHeight)
+    clipX tileNr = fromIntegral(tileNr `mod` tilesPerRow) * tileWidth
+    clipY tileNr = fromIntegral(tileNr `div` tilesPerRow) * tileHeight
+    clip tileNr = tile (clipX tileNr) (clipY tileNr)
+    destX x = x * tileWidth - cameraX
+    destY y = y * tileHeight - cameraY
+    dest x y = tile (destX x) (destY y)
+    isEmptyTile (x, y, tileNr) = tileNr == 0
+    copy coord =
+      let (x, y, tileNr) = coord
+      in SDL.copy renderer texture (Just $ clip tileNr) (Just $ dest x y)
+  in
+    mapM copy $ filter (not . isEmptyTile) $ zip3 xCoordinates' yCoordinates' tiles
+
 main :: IO ()
 main = do
   SDL.initialize [SDL.InitVideo, SDL.InitTimer, SDL.InitEvents]
@@ -179,9 +232,16 @@ main = do
   SDL.rendererDrawColor renderer $= rgb 110 132 174
 
   playerTexture <- loadTexture renderer "assets/player.png"
+  tileMapTexture <- loadTexture renderer "assets/grass.png"
   let
     game = Game
       { player = createPlayer playerTexture
+      , tileMap = TileMap
+          { texture = tileMapTexture
+          , tiles = defaultMap
+          , width = 15
+          , height = 11
+          }
       , camera = V2 0 0
       }
     loop = do
@@ -191,6 +251,7 @@ main = do
 
       SDL.clear renderer
       renderTee renderer playerTexture ((position $ player game) - (P $ camera game))
+      renderTileMap renderer (tileMap game) (camera game)
       SDL.present renderer
 
       let quit = (SDL.QuitEvent `elem` events) || (Quit `elem` inputs)
