@@ -5,6 +5,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
+import System.CPUTime (getCPUTime)
 import Debug.Trace (trace)
 import Control.Monad (when, unless)
 import Control.Concurrent (threadDelay)
@@ -23,11 +24,7 @@ screenWidth, screenHeight :: CInt
 (screenWidth, screenHeight) = (1280, 720)
 
 type Color = V4 Word8
-type Vector2d = V2 CInt
-type Point2d = Point V2 CInt
-
-p2 :: CInt -> CInt -> Point2d
-p2 x y = P $ V2 x y
+type Vector2d = V2 Double
 
 rgb :: Word8 -> Word8 -> Word8 -> Color
 rgb r g b = V4 r g b maxBound
@@ -50,14 +47,14 @@ data TileMap = TileMap
 
 data Player = Player
   { texture :: !SDL.Texture
-  , position :: !Point2d
+  , position :: !(Point V2 Double)
   , velocity :: !Vector2d
   }
 
 createPlayer :: SDL.Texture -> Player
 createPlayer t = Player
   { texture = t
-  , position = p2 170 500
+  , position = P $ V2 170 500
   , velocity = V2 0 0
   }
 
@@ -100,48 +97,48 @@ flipNone = V2 False False
 flipHorizontal = V2 False True
 flipVertical = V2 True False
 
-renderTee :: SDL.Renderer -> SDL.Texture -> Point2d -> IO [()]
+renderTee :: SDL.Renderer -> SDL.Texture -> Point V2 CInt -> IO [()]
 renderTee renderer texture position =
   let
     (P (V2 x y)) = position
     backFeetShadow = CopyExData
-      { source = SDL.Rectangle (p2 192 64) (V2 64 32)
-      , destination = SDL.Rectangle (p2 (x - 60) y) (V2 96 48)
+      { source = SDL.Rectangle (P $ V2 192 64) (V2 64 32)
+      , destination = SDL.Rectangle (P $ V2 (x - 60) y) (V2 96 48)
       , flips = flipNone
       }
     bodyShadow = CopyExData
-      { source = SDL.Rectangle (p2 96 0) (V2 96 96)
-      , destination = SDL.Rectangle (p2 (x - 48) (y - 48)) (V2 96 96)
+      { source = SDL.Rectangle (P $ V2 96 0) (V2 96 96)
+      , destination = SDL.Rectangle (P $ V2 (x - 48) (y - 48)) (V2 96 96)
       , flips = flipNone
       }
     frontFeetShadow = CopyExData
-      { source = SDL.Rectangle (p2 192 64) (V2 64 32)
-      , destination = SDL.Rectangle (p2 (x - 36) y) (V2 96 48)
+      { source = SDL.Rectangle (P $ V2 192 64) (V2 64 32)
+      , destination = SDL.Rectangle (P $ V2 (x - 36) y) (V2 96 48)
       , flips = flipNone
       }
     backFeet = CopyExData
-      { source = SDL.Rectangle (p2 192 32) (V2 64 32)
-      , destination = SDL.Rectangle (p2 (x - 60) y) (V2 96 48)
+      { source = SDL.Rectangle (P $ V2 192 32) (V2 64 32)
+      , destination = SDL.Rectangle (P $ V2 (x - 60) y) (V2 96 48)
       , flips = flipNone
       }
     body = CopyExData
-      { source = SDL.Rectangle (p2  0 0) (V2 96 96)
-      , destination = SDL.Rectangle (p2 (x - 48) (y - 48)) (V2 96 96)
+      { source = SDL.Rectangle (P $ V2  0 0) (V2 96 96)
+      , destination = SDL.Rectangle (P $ V2 (x - 48) (y - 48)) (V2 96 96)
       , flips = flipNone
       }
     frontFeet = CopyExData
-      { source = SDL.Rectangle (p2 192 32) (V2 64 32)
-      , destination = SDL.Rectangle (p2 (x - 36) y) (V2 96 48)
+      { source = SDL.Rectangle (P $ V2 192 32) (V2 64 32)
+      , destination = SDL.Rectangle (P $ V2 (x - 36) y) (V2 96 48)
       , flips = flipNone
       }
     leftEye = CopyExData
-      { source = SDL.Rectangle (p2 64 96) (V2 32 32)
-      , destination = SDL.Rectangle (p2 (x - 18) (y - 21)) (V2 36 36)
+      { source = SDL.Rectangle (P $ V2 64 96) (V2 32 32)
+      , destination = SDL.Rectangle (P $ V2 (x - 18) (y - 21)) (V2 36 36)
       , flips = flipNone
       }
     rightEye = CopyExData
-      { source = SDL.Rectangle (p2 64 96) (V2 32 32)
-      , destination = SDL.Rectangle (p2  (x - 6) (y - 21)) (V2 36 36)
+      { source = SDL.Rectangle (P $ V2 64 96) (V2 32 32)
+      , destination = SDL.Rectangle (P $ V2  (x - 6) (y - 21)) (V2 36 36)
       , flips = flipHorizontal
       }
     bodyParts =
@@ -189,12 +186,12 @@ renderTileMap renderer (TileMap {texture, tiles, width, height}) (V2 cameraX cam
     tileHeight = 64 :: CInt
     xCoordinates' = map fromIntegral $ xCoordinates width height
     yCoordinates' = map fromIntegral $ yCoordinates width height
-    tile x y = SDL.Rectangle (p2 x y) (V2 tileWidth tileHeight)
+    tile x y = SDL.Rectangle (P $ V2 x y) (V2 tileWidth tileHeight)
     clipX tileNr = fromIntegral(tileNr `mod` tilesPerRow) * tileWidth
     clipY tileNr = fromIntegral(tileNr `div` tilesPerRow) * tileHeight
     clip tileNr = tile (clipX tileNr) (clipY tileNr)
-    destX x = x * tileWidth - cameraX
-    destY y = y * tileHeight - cameraY
+    destX x = x * tileWidth - (round cameraX)
+    destY y = y * tileHeight - (round cameraY)
     dest x y = tile (destX x) (destY y)
     isEmptyTile (x, y, tileNr) = tileNr == 0
     copy coord =
@@ -202,6 +199,43 @@ renderTileMap renderer (TileMap {texture, tiles, width, height}) (V2 cameraX cam
       in SDL.copy renderer texture (Just $ clip tileNr) (Just $ dest x y)
   in
     mapM copy $ filter (not . isEmptyTile) $ zip3 xCoordinates' yCoordinates' tiles
+
+roundPoint :: Point V2 Double -> Point V2 CInt
+roundPoint (P (V2 x y)) = P $ V2 (fromIntegral $ round x) (fromIntegral $ round y)
+
+renderGame :: SDL.Renderer -> Game -> IO ()
+renderGame renderer Game{player, tileMap, camera} = do
+  SDL.clear renderer
+  renderTee renderer (texture (player :: Player)) (roundPoint $ (position player) - (P camera))
+  renderTileMap renderer tileMap camera
+  SDL.present renderer
+
+getTime = getCPUTime >>= (\time -> return $ time `div` 1000000000)
+
+clamp :: (Ord a) => a -> a -> a -> a
+clamp mn mx = max mn . min mx
+
+physics :: [Input] -> Game -> Integer -> Game
+physics inputs game@(Game{player}) tick =
+  let
+    is input = input `elem` inputs
+    (Player {velocity = (V2 vx vy), position}) = player
+    jump = if is Jump then -21 else 0
+    gravity = 0.75
+    vy' = sum [vy, jump, gravity]
+    r = if is MoveRight then 1 else 0
+    l = if is MoveLeft then 1 else 0
+    direction = (r - l) :: Double
+    vx' = clamp (-8) 8 (0.5 * vx + 4.0 * direction)
+    velocity' = V2 vx' vy'
+    position' = position + P velocity'
+  in
+    game
+      { player = player
+          { position = position'
+          , velocity = velocity'
+          }
+      }
 
 main :: IO ()
 main = do
@@ -244,19 +278,22 @@ main = do
           }
       , camera = V2 0 0
       }
-    loop = do
+    loop game startTime lastTick = do
       events <- map SDL.eventPayload <$> SDL.pollEvents
       let pressedKeys = mapMaybe toPressedKey events
       let inputs = map toInput pressedKeys
 
-      SDL.clear renderer
-      renderTee renderer playerTexture ((position $ player game) - (P $ camera game))
-      renderTileMap renderer (tileMap game) (camera game)
-      SDL.present renderer
+      currentTime <- getTime
+      let newTick = 1 * (currentTime - startTime)
+      let ticks = [(lastTick + 1)..newTick]
+      let newGame = foldl (physics inputs) game ticks
+
+      renderGame renderer newGame
 
       let quit = (SDL.QuitEvent `elem` events) || (Quit `elem` inputs)
-      unless quit loop
-  loop
+      unless quit (loop newGame startTime newTick)
+  startTime <- getTime
+  loop game startTime 0
 
   SDL.destroyRenderer renderer
   SDL.destroyWindow window

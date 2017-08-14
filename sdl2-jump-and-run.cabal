@@ -31,6 +31,8 @@ executable sdl2-jump-and-run-exe
                      , sdl2-jump-and-run
                      , sdl2
                      , sdl2-image
+                     , sdl2-ttf
+                     , time
   default-language:    Haskell2010
 
 test-suite sdl2-jump-and-run-test
