@@ -216,6 +216,14 @@ clamp mn mx = max mn . min mx
 physics :: [Input] -> Game -> Game
 physics inputs game@(Game{player}) =
   let
+    player' = if Restart `elem` inputs then restartPlayer player else updatePlayer inputs player
+  in
+    game
+      { player = player'
+      }
+
+updatePlayer inputs player =
+  let
     is input = input `elem` inputs
     (Player {velocity = (V2 vx vy), position}) = player
     jump = if is Jump then -21 else 0
@@ -228,12 +236,10 @@ physics inputs game@(Game{player}) =
     velocity' = V2 vx' vy'
     position' = position + P velocity'
   in
-    game
-      { player = player
-          { position = position'
-          , velocity = velocity'
-          }
-      }
+    player
+     { position = position'
+     , velocity = velocity'
+     }
 
 main :: IO ()
 main = do
