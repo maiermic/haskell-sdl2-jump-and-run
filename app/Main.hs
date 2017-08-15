@@ -7,7 +7,7 @@ module Main where
 
 import System.CPUTime (getCPUTime)
 import Debug.Trace (trace)
-import Control.Monad (when, unless)
+import Control.Monad (guard, when, unless)
 import Control.Concurrent (threadDelay)
 import Data.Maybe (mapMaybe)
 import Foreign.C.Types (CInt)
@@ -210,13 +210,11 @@ renderGame renderer Game{player, tileMap, camera} = do
   renderTileMap renderer tileMap camera
   SDL.present renderer
 
-getTime = getCPUTime >>= (\time -> return $ time `div` 1000000000)
-
 clamp :: (Ord a) => a -> a -> a -> a
 clamp mn mx = max mn . min mx
 
-physics :: [Input] -> Game -> Integer -> Game
-physics inputs game@(Game{player}) tick =
+physics :: [Input] -> Game -> Game
+physics inputs game@(Game{player}) =
   let
     is input = input `elem` inputs
     (Player {velocity = (V2 vx vy), position}) = player
@@ -278,22 +276,24 @@ main = do
           }
       , camera = V2 0 0
       }
-    loop game startTime lastTick = do
+    loop game lastTime = do
       events <- map SDL.eventPayload <$> SDL.pollEvents
       let pressedKeys = mapMaybe toPressedKey events
       let inputs = map toInput pressedKeys
-
-      currentTime <- getTime
-      let newTick = 1 * (currentTime - startTime)
-      let ticks = [(lastTick + 1)..newTick]
-      let newGame = foldl (physics inputs) game ticks
-
-      renderGame renderer newGame
-
       let quit = (SDL.QuitEvent `elem` events) || (Quit `elem` inputs)
-      unless quit (loop newGame startTime newTick)
-  startTime <- getTime
-  loop game startTime 0
+      currentTime <- SDL.Raw.getTicks
+      let dt = currentTime - lastTime
+      let tickTime = 1000 `div` 60
+      if dt > tickTime then do
+        let newGame = physics inputs game
+        renderGame renderer newGame
+        unless quit $ loop newGame (lastTime + tickTime)
+      else do
+        SDL.delay 1
+        unless quit $ loop game lastTime
+
+  startTime <- SDL.Raw.getTicks
+  loop game startTime
 
   SDL.destroyRenderer renderer
   SDL.destroyWindow window
