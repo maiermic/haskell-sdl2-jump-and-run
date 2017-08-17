@@ -320,6 +320,10 @@ updatePlayer tileMap inputs player =
 
 without values excludes = filter (`notElem` excludes) values
 
+moveCamera game@Game{player = Player{position = P (V2 px _)}, camera = V2 cx cy } =
+  game { camera = V2 (px - fromIntegral screenWidth / 2) cy }
+
+
 main :: IO ()
 main = do
   SDL.initialize [SDL.InitVideo, SDL.InitTimer, SDL.InitEvents]
@@ -370,7 +374,7 @@ main = do
       let dt = currentTime - lastTime
       let tickTime = 1000 `div` 60
       if dt > tickTime then do
-        let newGame = physics inputs game
+        let newGame = moveCamera $ physics inputs game
         renderGame renderer newGame
         unless quit $ loop newGame keysDown' (lastTime + tickTime)
       else do
