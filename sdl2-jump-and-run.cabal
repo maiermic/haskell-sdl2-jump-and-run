@@ -15,11 +15,13 @@ cabal-version:       >=1.10
 
 data-files:
   assets/*.png
+  assets/*.map
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Lib
+  exposed-modules:     TileMap
   build-depends:       base >= 4.7 && < 5
+                     , sdl2
   default-language:    Haskell2010
 
 executable sdl2-jump-and-run-exe
@@ -27,7 +29,6 @@ executable sdl2-jump-and-run-exe
   main-is:             Main.hs
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base
-                     , parsec
                      , sdl2-jump-and-run
                      , sdl2
                      , sdl2-image

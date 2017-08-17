@@ -5,6 +5,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
+import TileMap (TileMap(..), readTileMap)
+
 import Data.List (intercalate)
 import System.CPUTime (getCPUTime)
 import Debug.Trace (trace)
@@ -39,13 +41,6 @@ data Input
   | Restart
   | Quit
   deriving (Eq)
-
-data TileMap = TileMap
-  { texture :: SDL.Texture
-  , width :: !Int
-  , height :: !Int
-  , tiles :: ![Int]
-  }
 
 data Player = Player
   { texture :: SDL.Texture
@@ -186,20 +181,6 @@ renderTee renderer texture position =
   in
     mapM copy bodyParts
 
-defaultMap =
-  [  0,  0,  0,  0, 78,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-     4,  5,  0,  0, 78,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-    20, 21,  0,  0, 78,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-    20, 21,  0,  0, 78,  0,  0,  0,  0,  0,  0,  0,  0,  4,  5,
-    20, 21,  0,  0, 78,  0,  0,  0,  0,  0,  0,  0,  0, 20, 21,
-    20, 21,  0,  0, 78,  0,  0,  0,  0,  0,  0,  0,  0, 20, 21,
-    20, 21,  0,  0, 78,  0,  0,  4,  5,  0,  0,  0,  0, 20, 21,
-    20, 21,  0,  0, 78,  0,  0, 20, 21,  0,  0,  0,  0, 20, 21,
-    20, 38,  0,  0, 78,  0,  0, 22, 38,  0,  0,  0,  0, 22, 38,
-    20, 49, 16, 16, 16, 16, 16, 48, 49, 16, 16, 16, 16, 48, 49,
-    36, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52
-  ]
-
 xCoordinates :: Int -> Int -> [Int]
 xCoordinates columns rows = take (rows * columns) $ cycle [0..(columns - 1)]
 
@@ -337,9 +318,6 @@ updatePlayer tileMap inputs player =
      , velocity = velocity'
      }
 
--- TODO remove
-defaultMap' = TileMap { texture = undefined, tiles = defaultMap, width = 15, height = 11 }
-
 without values excludes = filter (`notElem` excludes) values
 
 main :: IO ()
@@ -372,14 +350,12 @@ main = do
 
   playerTexture <- loadTexture renderer "assets/player.png"
   tileMapTexture <- loadTexture renderer "assets/grass.png"
+  defaultTileMap <- getDataFileName "assets/default.map" >>= readFile >>= return <$> readTileMap
   let
     game = Game
       { player = createPlayer playerTexture
-      , tileMap = TileMap
+      , tileMap = defaultTileMap
           { texture = tileMapTexture
-          , tiles = defaultMap
-          , width = 15
-          , height = 11
           }
       , camera = V2 0 0
       }
