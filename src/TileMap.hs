@@ -7,12 +7,14 @@ module TileMap
     ) where
 
 import qualified SDL
+import qualified Tile
+import Tile (Tile)
 
 data TileMap = TileMap
   { texture :: SDL.Texture
   , width :: !Int
   , height :: !Int
-  , tiles :: ![Int]
+  , tiles :: ![Tile]
   }
 
 instance Show TileMap where
@@ -36,5 +38,5 @@ readTileMap text =
       { texture = undefined
       , width
       , height
-      , tiles = concat rows
+      , tiles = toEnum <$> concat rows
       }

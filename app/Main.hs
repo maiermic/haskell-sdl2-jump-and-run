@@ -6,6 +6,7 @@
 module Main where
 
 import TileMap (TileMap(..), readTileMap)
+import Tile (Tile(..))
 
 import Text.Printf (printf)
 import Data.List (intercalate)
@@ -210,14 +211,14 @@ renderTileMap renderer (TileMap {texture, tiles, width, height}) (V2 cameraX cam
     destX x = x * tileWidth - (round cameraX)
     destY y = y * tileHeight - (round cameraY)
     dest x y = tile (destX x) (destY y)
-    isEmptyTile (x, y, tileNr) = tileNr == 0
+    isEmptyTile (_, _, tile) = tile == Tile.Air
     copy coord =
-      let (x, y, tileNr) = coord
-      in SDL.copy renderer texture (Just $ clip tileNr) (Just $ dest x y)
+      let (x, y, tile) = coord
+      in SDL.copy renderer texture (Just $ clip $ fromEnum tile) (Just $ dest x y)
   in
     mapM copy $ filter (not . isEmptyTile) $ zip3 xCoordinates' yCoordinates' tiles
 
-getTile :: TileMap -> Float -> Float -> Int
+getTile :: TileMap -> Float -> Float -> Tile
 getTile TileMap{width, height, tiles} x y =
   let
     nx = clamp 0 (width - 1) (round x `div` fromIntegral tileWidth)
@@ -228,12 +229,7 @@ getTile TileMap{width, height, tiles} x y =
 
 isSolid :: TileMap -> Float -> Float -> Bool
 isSolid tileMap x y =
-  let
-    air = 0
-    start = 78
-    finish = 110
-  in
-    getTile tileMap x y `notElem` [air, start, finish]
+  getTile tileMap x y `notElem` [Tile.Air, Tile.Start, Tile.Finish]
 
 onGround :: TileMap -> Point V2 Float -> Vector2d -> Bool
 onGround tileMap position size =
@@ -353,8 +349,8 @@ logic tick game@Game{tileMap, player = player@Player{time = time@Time{begin, fin
   let
     time' =
       case getTile tileMap px py of
-        78 -> time {begin = fromIntegral tick}
-        110 | begin >= 0 ->
+        Tile.Start -> time {begin = fromIntegral tick}
+        Tile.Finish | begin >= 0 ->
           let
             finish' = fromIntegral tick - begin
           in
