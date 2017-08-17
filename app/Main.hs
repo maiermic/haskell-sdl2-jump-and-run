@@ -104,6 +104,13 @@ toPressedKey :: SDL.EventPayload -> Maybe SDL.Keycode
 toPressedKey (SDL.KeyboardEvent e) | isPressedKey e = Just $ SDL.keysymKeycode $ SDL.keyboardEventKeysym e
 toPressedKey _ = Nothing
 
+isReleasedKey :: SDL.KeyboardEventData -> Bool
+isReleasedKey eventData = SDL.Released == SDL.keyboardEventKeyMotion eventData
+
+toReleasedKey :: SDL.EventPayload -> Maybe SDL.Keycode
+toReleasedKey (SDL.KeyboardEvent e) | isReleasedKey e = Just $ SDL.keysymKeycode $ SDL.keyboardEventKeysym e
+toReleasedKey _ = Nothing
+
 loadTexture :: SDL.Renderer -> FilePath -> IO SDL.Texture
 loadTexture renderer filePath =
   getDataFileName filePath >>= SDL.Image.loadTexture renderer
@@ -346,6 +353,8 @@ updatePlayer tileMap inputs player =
 -- TODO remove
 defaultMap' = TileMap { texture = undefined, tiles = defaultMap, width = 15, height = 11 }
 
+without values excludes = filter (`notElem` excludes) values
+
 main :: IO ()
 main = do
   SDL.initialize [SDL.InitVideo, SDL.InitTimer, SDL.InitEvents]
@@ -387,10 +396,12 @@ main = do
           }
       , camera = V2 0 0
       }
-    loop game lastTime = do
+    loop game keysDown lastTime = do
       events <- map SDL.eventPayload <$> SDL.pollEvents
       let pressedKeys = mapMaybe toPressedKey events
-      let inputs = map toInput pressedKeys
+      let releasedKeys = mapMaybe toReleasedKey events
+      let keysDown' = (keysDown ++ pressedKeys) `without` releasedKeys
+      let inputs = map toInput keysDown'
       let quit = (SDL.QuitEvent `elem` events) || (Quit `elem` inputs)
       currentTime <- SDL.Raw.getTicks
       let dt = currentTime - lastTime
@@ -398,13 +409,13 @@ main = do
       if dt > tickTime then do
         let newGame = physics inputs game
         renderGame renderer newGame
-        unless quit $ loop newGame (lastTime + tickTime)
+        unless quit $ loop newGame keysDown' (lastTime + tickTime)
       else do
         SDL.delay 1
-        unless quit $ loop game lastTime
+        unless quit $ loop game keysDown' lastTime
 
   startTime <- SDL.Raw.getTicks
-  loop game startTime
+  loop game [] startTime
 
   SDL.destroyRenderer renderer
   SDL.destroyWindow window
