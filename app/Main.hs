@@ -348,9 +348,9 @@ main = do
           }
   SDL.rendererDrawColor renderer $= rgb 110 132 174
 
-  playerTexture <- loadTexture renderer "assets/player.png"
-  tileMapTexture <- loadTexture renderer "assets/grass.png"
-  defaultTileMap <- getDataFileName "assets/default.map" >>= readFile >>= return <$> readTileMap
+  playerTexture <- loadTexture renderer "player.png"
+  tileMapTexture <- loadTexture renderer "grass.png"
+  defaultTileMap <- getDataFileName "default.map" >>= readFile >>= return <$> readTileMap
   let
     game = Game
       { player = createPlayer playerTexture

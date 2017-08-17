@@ -13,9 +13,11 @@ build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10
 
+data-dir:
+  assets
 data-files:
-  assets/*.png
-  assets/*.map
+  *.png
+  *.map
 
 library
   hs-source-dirs:      src
