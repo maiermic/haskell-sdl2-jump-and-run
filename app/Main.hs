@@ -7,6 +7,7 @@ module Main where
 
 import TileMap (TileMap(..), readTileMap)
 
+import Text.Printf (printf)
 import Data.List (intercalate)
 import System.CPUTime (getCPUTime)
 import Debug.Trace (trace)
@@ -17,7 +18,7 @@ import Foreign.C.Types (CInt)
 import SDL.Vect (Point(..), V2(..), V4(..))
 import SDL.Video.Renderer (Rectangle(..))
 import SDL (($=))
-import GHC.Word (Word8(..))
+import GHC.Word (Word8(..), Word32)
 import qualified SDL
 import qualified SDL.Image
 import qualified SDL.Raw
@@ -27,6 +28,7 @@ import Paths_sdl2_jump_and_run (getDataFileName)
 screenWidth, screenHeight :: CInt
 (screenWidth, screenHeight) = (1280, 720)
 
+type Tick = Word32
 type Color = V4 Word8
 type Vector2d = V2 Float
 
@@ -42,10 +44,21 @@ data Input
   | Quit
   deriving (Eq)
 
+data Time = Time
+  { begin, finish, best :: !Int
+  } deriving (Show)
+
+newTime = Time
+  { begin = 0
+  , finish = -1
+  , best = -1
+  }
+
 data Player = Player
   { texture :: SDL.Texture
   , position :: !(Point V2 Float)
   , velocity :: !Vector2d
+  , time :: !Time
   }
 
 instance Show Player where
@@ -57,10 +70,12 @@ createPlayer t = Player
   { texture = t
   , position = P $ V2 170 500
   , velocity = V2 0 0
+  , time = newTime
   }
 
 restartPlayer :: Player -> Player
-restartPlayer p = createPlayer $ texture (p :: Player)
+restartPlayer p@Player{texture, time = Time{best}} =
+  (createPlayer texture) { time = newTime {best} }
 
 data Game = Game
   { player :: !Player
@@ -68,6 +83,7 @@ data Game = Game
   , camera :: !Vector2d
   }
 
+ticksPerSecond = 60
 
 tilesPerRow = 16 :: Int
 tileWidth = 64 :: CInt
@@ -76,11 +92,6 @@ tileHeight = 64 :: CInt
 playerWidth = 64 :: Float
 playerHeight = 64 :: Float
 playerSize = V2 playerWidth playerHeight
-
--- tile numbers
-air = 0
-start = 78
-finish = 110
 
 
 toInput :: SDL.Keycode -> Input
@@ -217,7 +228,12 @@ getTile TileMap{width, height, tiles} x y =
 
 isSolid :: TileMap -> Float -> Float -> Bool
 isSolid tileMap x y =
-  getTile tileMap x y `notElem` [air, start, finish]
+  let
+    air = 0
+    start = 78
+    finish = 110
+  in
+    getTile tileMap x y `notElem` [air, start, finish]
 
 onGround :: TileMap -> Point V2 Float -> Vector2d -> Bool
 onGround tileMap position size =
@@ -323,6 +339,35 @@ without values excludes = filter (`notElem` excludes) values
 moveCamera game@Game{player = Player{position = P (V2 px _)}, camera = V2 cx cy } =
   game { camera = V2 (px - fromIntegral screenWidth / 2) cy }
 
+formatTime :: Tick -> String
+formatTime tick =
+  let
+    mins = (tick `div` ticksPerSecond) `div` 60
+    secs = (tick `div` ticksPerSecond) `mod` 60
+    cents = (tick `mod` ticksPerSecond) * 2
+  in
+    printf "%02d:%02d:%02d" mins secs cents
+
+logic :: Tick -> Game -> Game
+logic tick game@Game{tileMap, player = player@Player{time = time@Time{begin, finish, best}, position = P (V2 px py)}} =
+  let
+    time' =
+      case getTile tileMap px py of
+        78 -> time {begin = fromIntegral tick}
+        110 | begin >= 0 ->
+          let
+            finish' = fromIntegral tick - begin
+          in
+            time
+              { finish = trace ("Finished in " ++ formatTime (fromIntegral finish')) finish'
+              , begin = -1
+              , best =
+                  if best < 0 || finish' < best
+                  then finish'
+                  else best
+              }
+        _ -> time
+  in game { player = player { time = time' } }
 
 main :: IO ()
 main = do
@@ -372,9 +417,10 @@ main = do
       let quit = (SDL.QuitEvent `elem` events) || (Quit `elem` inputs)
       currentTime <- SDL.Raw.getTicks
       let dt = currentTime - lastTime
-      let tickTime = 1000 `div` 60
+      let tickTime = 1000 `div` ticksPerSecond
+      let tick = currentTime `div` tickTime
       if dt > tickTime then do
-        let newGame = moveCamera $ physics inputs game
+        let newGame = logic tick $ moveCamera $ physics inputs game
         renderGame renderer newGame
         unless quit $ loop newGame keysDown' (lastTime + tickTime)
       else do
