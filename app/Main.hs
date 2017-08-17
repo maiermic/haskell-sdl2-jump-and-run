@@ -231,8 +231,6 @@ getTile TileMap{width, height, tiles} x y =
     nx = clamp 0 (width - 1) (round x `div` fromIntegral tileWidth)
     ny = clamp 0 (height - 1) (round y `div` fromIntegral tileHeight)
     pos = ny * width + nx
---    pos' = ny * width + nx
---    pos = trace (show (nx, ny, pos')) pos'
   in
     tiles !! pos
 
@@ -270,24 +268,13 @@ moveBox tileMap position velocity size =
   let
     distance = len velocity
     maximum = round distance
---    fraction :: Double
     fraction = 1.0 / fromIntegral (maximum + 1)
---    fraction' = 1.0 / fromIntegral (maximum + 1)
---    fraction = trace ("fraction: " ++ show fraction ++ ", maximum: " ++ show maximum ++ ", distance: " ++ show distance) fraction'
-    moveBox' size (P (V2 posX posY), V2 velX velY) i | trace ("moveBox' " ++ (intercalate ", " [show (posX, posY), show (velX, velY)])) False = undefined
     moveBox' size (pos@(P (V2 posX posY)), vel@(V2 velX velY)) i =
       let
---        newPos@(P (V2 newPosX newPosY)) = pos + P vel * fraction
-        newPos'@(P (V2 newPosX newPosY)) = pos + P vel * fraction
-        newPos = trace ("newPos: " ++ show (newPosX, newPosY)) newPos'
---        isHit = testBox tileMap newPos size
-        isHit' = testBox tileMap newPos size
-        isHit = trace ("isHit: " ++ show isHit') isHit'
+        newPos@(P (V2 newPosX newPosY)) = pos + P vel * fraction
+        isHit = testBox tileMap newPos size
         isHitX = testBox tileMap (P $ V2 newPosX posY) size
---        isHitY = testBox tileMap (P $ V2 posX newPosY) size
-        isHitY' = testBox tileMap (P $ V2 posX newPosY) size
-        isHitY = trace ("isHit (X,Y): " ++ show (isHitX, isHitY')) isHitY'
---        isHitCorner = isHitX && isHitY
+        isHitY = testBox tileMap (P $ V2 posX newPosY) size
         isHitCorner = not (isHitX || isHitY)
         (posX', velX') =
           if isHitX || isHitCorner
