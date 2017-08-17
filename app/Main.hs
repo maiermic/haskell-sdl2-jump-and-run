@@ -296,7 +296,7 @@ moveBox tileMap position velocity size =
 renderGame :: SDL.Renderer -> Game -> IO ()
 renderGame renderer Game{player, tileMap, camera} = do
   SDL.clear renderer
-  renderTee renderer (texture (player :: Player)) (round <$> (position player) - (P camera))
+  renderTee renderer (texture (player :: Player)) (round <$> position player - P camera)
   renderTileMap renderer tileMap camera
   SDL.present renderer
 
@@ -318,7 +318,7 @@ physics inputs game@(Game{player, tileMap}) =
 updatePlayer tileMap inputs player =
   let
     is input = input `elem` inputs
-    (Player {velocity = (V2 vx vy), position}) = player
+    Player {velocity = (V2 vx vy), position} = player
     isOnGround = onGround tileMap position playerSize
     jump = if is Jump && isOnGround then -21 else 0
     gravity = 0.75
