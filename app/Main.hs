@@ -26,7 +26,7 @@ screenWidth, screenHeight :: CInt
 (screenWidth, screenHeight) = (1280, 720)
 
 type Color = V4 Word8
-type Vector2d = V2 Double
+type Vector2d = V2 Float
 
 rgb :: Word8 -> Word8 -> Word8 -> Color
 rgb r g b = V4 r g b maxBound
@@ -49,7 +49,7 @@ data TileMap = TileMap
 
 data Player = Player
   { texture :: SDL.Texture
-  , position :: !(Point V2 Double)
+  , position :: !(Point V2 Float)
   , velocity :: !Vector2d
   }
 
@@ -78,8 +78,8 @@ tilesPerRow = 16 :: Int
 tileWidth = 64 :: CInt
 tileHeight = 64 :: CInt
 
-playerWidth = 64 :: Double
-playerHeight = 64 :: Double
+playerWidth = 64 :: Float
+playerHeight = 64 :: Float
 playerSize = V2 playerWidth playerHeight
 
 -- tile numbers
@@ -225,7 +225,7 @@ renderTileMap renderer (TileMap {texture, tiles, width, height}) (V2 cameraX cam
   in
     mapM copy $ filter (not . isEmptyTile) $ zip3 xCoordinates' yCoordinates' tiles
 
-getTile :: TileMap -> Double -> Double -> Int
+getTile :: TileMap -> Float -> Float -> Int
 getTile TileMap{width, height, tiles} x y =
   let
     nx = clamp 0 (width - 1) (round x `div` fromIntegral tileWidth)
@@ -234,11 +234,11 @@ getTile TileMap{width, height, tiles} x y =
   in
     tiles !! pos
 
-isSolid :: TileMap -> Double -> Double -> Bool
+isSolid :: TileMap -> Float -> Float -> Bool
 isSolid tileMap x y =
   getTile tileMap x y `notElem` [air, start, finish]
 
-onGround :: TileMap -> Point V2 Double -> Vector2d -> Bool
+onGround :: TileMap -> Point V2 Float -> Vector2d -> Bool
 onGround tileMap position size =
   let
     (P (V2 posX posY)) = position
@@ -249,7 +249,7 @@ onGround tileMap position size =
       , (posX + width, posY + height + 1)
       ]
 
-testBox :: TileMap -> Point V2 Double -> Vector2d -> Bool
+testBox :: TileMap -> Point V2 Float -> Vector2d -> Bool
 testBox tileMap position size =
   let
     (P (V2 posX posY)) = position
@@ -257,13 +257,13 @@ testBox tileMap position size =
   in
     or $ isSolid tileMap <$> [posX - width, posX + width] <*> [posY - height, posY + height]
 
-len :: Vector2d -> Double
+len :: Vector2d -> Float
 len v = sqrt $ sum $ v ** 2
 
-toDouble :: Integral a => a -> Double
-toDouble = fromIntegral
+toFloat :: Integral a => a -> Float
+toFloat = fromIntegral
 
-moveBox :: TileMap -> Point V2 Double -> Vector2d  -> Vector2d -> (Point V2 Double, Vector2d)
+moveBox :: TileMap -> Point V2 Float -> Vector2d  -> Vector2d -> (Point V2 Float, Vector2d)
 moveBox tileMap position velocity size =
   let
     distance = len velocity
@@ -325,7 +325,7 @@ updatePlayer tileMap inputs player =
     vy' = sum [vy, jump, gravity]
     r = if is MoveRight then 1 else 0
     l = if is MoveLeft then 1 else 0
-    direction = (r - l) :: Double
+    direction = (r - l) :: Float
     vx' = clamp (-8) 8 $
       if isOnGround
       then 0.5 * vx + 4.0 * direction
