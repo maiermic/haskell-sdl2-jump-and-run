@@ -5,6 +5,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
+import Data.List (intercalate)
 import System.CPUTime (getCPUTime)
 import Debug.Trace (trace)
 import Control.Monad (guard, when, unless)
@@ -12,6 +13,7 @@ import Control.Concurrent (threadDelay)
 import Data.Maybe (mapMaybe)
 import Foreign.C.Types (CInt)
 import SDL.Vect (Point(..), V2(..), V4(..))
+import SDL.Video.Renderer (Rectangle(..))
 import SDL (($=))
 import GHC.Word (Word8(..))
 import qualified SDL
@@ -39,17 +41,21 @@ data Input
   deriving (Eq)
 
 data TileMap = TileMap
-  { texture :: !SDL.Texture
+  { texture :: SDL.Texture
   , width :: !Int
   , height :: !Int
   , tiles :: ![Int]
   }
 
 data Player = Player
-  { texture :: !SDL.Texture
+  { texture :: SDL.Texture
   , position :: !(Point V2 Double)
   , velocity :: !Vector2d
   }
+
+instance Show Player where
+  show Player{position = P (V2 posX posY), velocity = V2 velX velY} =
+    "Player(position=" ++ show (posX, posY) ++ ",velocity=" ++ show (velX, velY) ++ ")"
 
 createPlayer :: SDL.Texture -> Player
 createPlayer t = Player
@@ -66,6 +72,21 @@ data Game = Game
   , tileMap :: !TileMap
   , camera :: !Vector2d
   }
+
+
+tilesPerRow = 16 :: Int
+tileWidth = 64 :: CInt
+tileHeight = 64 :: CInt
+
+playerWidth = 64 :: Double
+playerHeight = 64 :: Double
+playerSize = V2 playerWidth playerHeight
+
+-- tile numbers
+air = 0
+start = 78
+finish = 110
+
 
 toInput :: SDL.Keycode -> Input
 toInput = \case
@@ -181,9 +202,6 @@ yCoordinates columns rows = concat $ map (take columns . repeat) [0..(rows - 1)]
 renderTileMap :: SDL.Renderer -> TileMap -> Vector2d -> IO [()]
 renderTileMap renderer (TileMap {texture, tiles, width, height}) (V2 cameraX cameraY) =
   let
-    tilesPerRow = 16
-    tileWidth = 64 :: CInt
-    tileHeight = 64 :: CInt
     xCoordinates' = map fromIntegral $ xCoordinates width height
     yCoordinates' = map fromIntegral $ yCoordinates width height
     tile x y = SDL.Rectangle (P $ V2 x y) (V2 tileWidth tileHeight)
@@ -200,13 +218,91 @@ renderTileMap renderer (TileMap {texture, tiles, width, height}) (V2 cameraX cam
   in
     mapM copy $ filter (not . isEmptyTile) $ zip3 xCoordinates' yCoordinates' tiles
 
-roundPoint :: Point V2 Double -> Point V2 CInt
-roundPoint (P (V2 x y)) = P $ V2 (fromIntegral $ round x) (fromIntegral $ round y)
+getTile :: TileMap -> Double -> Double -> Int
+getTile TileMap{width, height, tiles} x y =
+  let
+    nx = clamp 0 (width - 1) (round x `div` fromIntegral tileWidth)
+    ny = clamp 0 (height - 1) (round y `div` fromIntegral tileHeight)
+    pos = ny * width + nx
+--    pos' = ny * width + nx
+--    pos = trace (show (nx, ny, pos')) pos'
+  in
+    tiles !! pos
+
+isSolid :: TileMap -> Double -> Double -> Bool
+isSolid tileMap x y =
+  getTile tileMap x y `notElem` [air, start, finish]
+
+onGround :: TileMap -> Point V2 Double -> Vector2d -> Bool
+onGround tileMap position size =
+  let
+    (P (V2 posX posY)) = position
+    V2 width height = size * 0.5
+  in
+    or $ uncurry (isSolid tileMap) <$>
+      [ (posX - width, posY + height + 1)
+      , (posX + width, posY + height + 1)
+      ]
+
+testBox :: TileMap -> Point V2 Double -> Vector2d -> Bool
+testBox tileMap position size =
+  let
+    (P (V2 posX posY)) = position
+    V2 width height = size * 0.5
+  in
+    or $ isSolid tileMap <$> [posX - width, posX + width] <*> [posY - height, posY + height]
+
+len :: Vector2d -> Double
+len v = sqrt $ sum $ v ** 2
+
+toDouble :: Integral a => a -> Double
+toDouble = fromIntegral
+
+moveBox :: TileMap -> Point V2 Double -> Vector2d  -> Vector2d -> (Point V2 Double, Vector2d)
+moveBox tileMap position velocity size =
+  let
+    distance = len velocity
+    maximum = round distance
+--    fraction :: Double
+    fraction = 1.0 / fromIntegral (maximum + 1)
+--    fraction' = 1.0 / fromIntegral (maximum + 1)
+--    fraction = trace ("fraction: " ++ show fraction ++ ", maximum: " ++ show maximum ++ ", distance: " ++ show distance) fraction'
+    moveBox' size (P (V2 posX posY), V2 velX velY) i | trace ("moveBox' " ++ (intercalate ", " [show (posX, posY), show (velX, velY)])) False = undefined
+    moveBox' size (pos@(P (V2 posX posY)), vel@(V2 velX velY)) i =
+      let
+--        newPos@(P (V2 newPosX newPosY)) = pos + P vel * fraction
+        newPos'@(P (V2 newPosX newPosY)) = pos + P vel * fraction
+        newPos = trace ("newPos: " ++ show (newPosX, newPosY)) newPos'
+--        isHit = testBox tileMap newPos size
+        isHit' = testBox tileMap newPos size
+        isHit = trace ("isHit: " ++ show isHit') isHit'
+        isHitX = testBox tileMap (P $ V2 newPosX posY) size
+--        isHitY = testBox tileMap (P $ V2 posX newPosY) size
+        isHitY' = testBox tileMap (P $ V2 posX newPosY) size
+        isHitY = trace ("isHit (X,Y): " ++ show (isHitX, isHitY')) isHitY'
+--        isHitCorner = isHitX && isHitY
+        isHitCorner = not (isHitX || isHitY)
+        (posX', velX') =
+          if isHitX || isHitCorner
+          then (posX, 0) -- stop x-movement at current x-position
+          else (newPosX, velX)
+        (posY', velY') =
+          if isHitY || isHitCorner
+          then (posY, 0) -- stop y-movement at current y-position
+          else (newPosY, velY)
+      in
+        if isHit
+        then (P (V2 posX' posY'), V2 velX' velY')
+        else (newPos, vel)
+  in
+    if distance < 0
+    then (position, velocity)
+    else foldl (moveBox' size) (position, velocity) [0..maximum]
 
 renderGame :: SDL.Renderer -> Game -> IO ()
 renderGame renderer Game{player, tileMap, camera} = do
   SDL.clear renderer
-  renderTee renderer (texture (player :: Player)) (roundPoint $ (position player) - (P camera))
+  renderTee renderer (texture (player :: Player)) (round <$> (position player) - (P camera))
   renderTileMap renderer tileMap camera
   SDL.present renderer
 
@@ -214,32 +310,41 @@ clamp :: (Ord a) => a -> a -> a -> a
 clamp mn mx = max mn . min mx
 
 physics :: [Input] -> Game -> Game
-physics inputs game@(Game{player}) =
+physics inputs game@(Game{player, tileMap}) =
   let
-    player' = if Restart `elem` inputs then restartPlayer player else updatePlayer inputs player
+    player' =
+      if Restart `elem` inputs
+      then restartPlayer player
+      else updatePlayer tileMap inputs player
   in
     game
       { player = player'
       }
 
-updatePlayer inputs player =
+updatePlayer tileMap inputs player =
   let
     is input = input `elem` inputs
     (Player {velocity = (V2 vx vy), position}) = player
-    jump = if is Jump then -21 else 0
+    isOnGround = onGround tileMap position playerSize
+    jump = if is Jump && isOnGround then -21 else 0
     gravity = 0.75
     vy' = sum [vy, jump, gravity]
     r = if is MoveRight then 1 else 0
     l = if is MoveLeft then 1 else 0
     direction = (r - l) :: Double
-    vx' = clamp (-8) 8 (0.5 * vx + 4.0 * direction)
-    velocity' = V2 vx' vy'
-    position' = position + P velocity'
+    vx' = clamp (-8) 8 $
+      if isOnGround
+      then 0.5 * vx + 4.0 * direction
+      else 0.95 * vx + 2.0 * direction
+    (position', velocity') = moveBox tileMap position (V2 vx' vy') playerSize
   in
     player
      { position = position'
      , velocity = velocity'
      }
+
+-- TODO remove
+defaultMap' = TileMap { texture = undefined, tiles = defaultMap, width = 15, height = 11 }
 
 main :: IO ()
 main = do
