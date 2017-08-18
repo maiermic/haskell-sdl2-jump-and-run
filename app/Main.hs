@@ -19,7 +19,7 @@ import Foreign.C.Types (CInt)
 import GHC.Word (Word32, Word8(..))
 import SDL (($=))
 import qualified SDL
-import SDL.Font (Font(..))
+import SDL.Font (Color, Font(..))
 import qualified SDL.Font
 import qualified SDL.Image
 import qualified SDL.Raw
@@ -34,8 +34,6 @@ screenWidth, screenHeight :: CInt
 (screenWidth, screenHeight) = (1280, 720)
 
 type Tick = Word32
-
-type Color = V4 Word8
 
 type Vector2d = V2 Float
 
