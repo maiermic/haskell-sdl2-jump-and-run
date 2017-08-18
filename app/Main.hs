@@ -416,31 +416,28 @@ formatTime tick =
       cents = (tick `mod` ticksPerSecond) * 2
   in printf "%02d:%02d:%02d" mins secs cents
 
+updateTime :: Tile -> Tick -> Time -> Time
+updateTime tile tick time@Time {begin, finish, best} =
+  case tile of
+    Tile.Start -> time {begin = fromIntegral tick}
+    Tile.Finish
+      | begin >= 0 ->
+        let finish' = fromIntegral tick - begin
+        in time
+           { finish = finish'
+           , begin = -1
+           , best =
+               if best < 0 || finish' < best
+                 then finish'
+                 else best
+           }
+    _ -> time
+
 logic :: Tick -> Game -> Game
-logic tick game@Game { tileMap
-                     , player = player@Player { time = time@Time { begin
-                                                                 , finish
-                                                                 , best
-                                                                 }
-                                              , position = P (V2 px py)
-                                              }
-                     } =
-  let time' =
-        case getTile tileMap px py of
-          Tile.Start -> time {begin = fromIntegral tick}
-          Tile.Finish
-            | begin >= 0 ->
-              let finish' = fromIntegral tick - begin
-              in time
-                 { finish = finish'
-                 , begin = -1
-                 , best =
-                     if best < 0 || finish' < best
-                       then finish'
-                       else best
-                 }
-          _ -> time
-  in game {player = player {time = time'}}
+logic tick game@Game {tileMap, player} =
+  let Player {time, position = P (V2 px py)} = player
+  in game
+     {player = player {time = updateTime (getTile tileMap px py) tick time}}
 
 main :: IO ()
 main = do
