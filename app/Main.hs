@@ -19,6 +19,9 @@ import Foreign.C.Types (CInt)
 import SDL.Vect (Point(..), V2(..), V4(..))
 import SDL.Video.Renderer (Rectangle(..))
 import SDL (($=))
+import Data.Text (pack)
+import SDL.Font (Font(..))
+import qualified SDL.Font
 import GHC.Word (Word8(..), Word32)
 import qualified SDL
 import qualified SDL.Image
@@ -35,6 +38,11 @@ type Vector2d = V2 Float
 
 rgb :: Word8 -> Word8 -> Word8 -> Color
 rgb r g b = V4 r g b maxBound
+
+rgba :: Word8 -> Word8 -> Word8 -> Word8 -> Color
+rgba = V4
+
+rect x y w h = SDL.Rectangle (P $ V2 x y) (V2 w h)
 
 data Input
   = None
@@ -82,6 +90,7 @@ data Game = Game
   { player :: !Player
   , tileMap :: !TileMap
   , camera :: !Vector2d
+  , font :: Font
   }
 
 ticksPerSecond = 60
@@ -286,11 +295,47 @@ moveBox tileMap position velocity size =
     then (position, velocity)
     else foldl (moveBox' size) (position, velocity) [0..maximum]
 
-renderGame :: SDL.Renderer -> Game -> IO ()
-renderGame renderer Game{player, tileMap, camera} = do
+renderText :: SDL.Renderer -> Font -> Color -> String -> CInt -> CInt -> IO ()
+renderText renderer font color text x y =
+  let
+    outlineColor = rgba 0 0 0 64
+    renderText' :: CInt -> Color -> IO ()
+    renderText' outline color = do
+      SDL.Font.setOutline font $ fromIntegral outline
+      surface <- SDL.Font.blended font color $ pack text
+      texture <- SDL.createTextureFromSurface renderer surface
+      V2 surfaceWidth surfaceHeight <- SDL.surfaceDimensions surface
+      SDL.freeSurface surface
+      let
+        source = rect 0 0 surfaceWidth surfaceHeight
+        dest = rect (x - outline) (y - outline) surfaceWidth surfaceHeight
+        angle = 0.0
+        center = Nothing
+      SDL.copyEx renderer texture (Just source) (Just dest) angle center flipNone
+      SDL.destroyTexture texture
+  in do
+    renderText' 2 outlineColor
+    renderText' 0 color
+
+renderPlayerTime :: SDL.Renderer -> Game -> Tick -> IO ()
+renderPlayerTime renderer game tick =
+  let
+    Time {begin, finish, best} = time $ player game
+    white = rgb maxBound maxBound maxBound
+    renderText' = renderText renderer (font game) white
+  in do
+    if begin >= 0
+    then renderText' (formatTime $ tick - fromIntegral begin) 50 100
+    else when (finish >= 0) $ renderText' ("Finished in: " ++ (formatTime $ fromIntegral finish)) 50 100
+    when (best >= 0) $
+      renderText' ("Best time: " ++ (formatTime $ fromIntegral best)) 50 150
+
+renderGame :: SDL.Renderer -> Game -> Tick -> IO ()
+renderGame renderer game@Game{player, tileMap, camera} tick = do
   SDL.clear renderer
   renderTee renderer (texture (player :: Player)) (round <$> position player - P camera)
   renderTileMap renderer tileMap camera
+  renderPlayerTime renderer game tick
   SDL.present renderer
 
 clamp :: (Ord a) => a -> a -> a -> a
@@ -355,7 +400,7 @@ logic tick game@Game{tileMap, player = player@Player{time = time@Time{begin, fin
             finish' = fromIntegral tick - begin
           in
             time
-              { finish = trace ("Finished in " ++ formatTime (fromIntegral finish')) finish'
+              { finish = finish'
               , begin = -1
               , best =
                   if best < 0 || finish' < best
@@ -396,6 +441,8 @@ main = do
   playerTexture <- loadTexture renderer "player.png"
   tileMapTexture <- loadTexture renderer "grass.png"
   defaultTileMap <- getDataFileName "default.map" >>= readFile >>= return <$> readTileMap
+  SDL.Font.initialize
+  font <- getDataFileName "DejaVuSans.ttf" >>= (flip SDL.Font.load $ 28) -- Pt size for retina screen. :<
   let
     game = Game
       { player = createPlayer playerTexture
@@ -403,6 +450,7 @@ main = do
           { texture = tileMapTexture
           }
       , camera = V2 0 0
+      , font
       }
     loop game keysDown lastTime = do
       events <- map SDL.eventPayload <$> SDL.pollEvents
@@ -417,7 +465,7 @@ main = do
       let tick = currentTime `div` tickTime
       if dt > tickTime then do
         let newGame = logic tick $ moveCamera $ physics inputs game
-        renderGame renderer newGame
+        renderGame renderer newGame tick
         unless quit $ loop newGame keysDown' (lastTime + tickTime)
       else do
         SDL.delay 1
@@ -426,6 +474,7 @@ main = do
   startTime <- SDL.Raw.getTicks
   loop game [] startTime
 
+  SDL.Font.quit
   SDL.destroyRenderer renderer
   SDL.destroyWindow window
   SDL.quit

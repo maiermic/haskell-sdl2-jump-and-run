@@ -18,6 +18,7 @@ data-dir:
 data-files:
   *.png
   *.map
+  *.ttf
 
 library
   hs-source-dirs:      src
@@ -37,6 +38,7 @@ executable sdl2-jump-and-run-exe
                      , sdl2-image
                      , sdl2-ttf
                      , time
+                     , text
   default-language:    Haskell2010
 
 test-suite sdl2-jump-and-run-test
