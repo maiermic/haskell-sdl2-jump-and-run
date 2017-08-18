@@ -209,7 +209,7 @@ renderTee renderer texture position =
         ]
       angle = 0.0
       rotation = Nothing
-      copy bodyPart@(CopyExData {source, destination, flips}) =
+      copy bodyPart@CopyExData {source, destination, flips} =
         SDL.copyEx
           renderer
           texture
@@ -224,19 +224,18 @@ xCoordinates :: Int -> Int -> [Int]
 xCoordinates columns rows = take (rows * columns) $ cycle [0 .. (columns - 1)]
 
 yCoordinates :: Int -> Int -> [Int]
-yCoordinates columns rows =
-  concat $ map (take columns . repeat) [0 .. (rows - 1)]
+yCoordinates columns rows = concatMap (replicate columns) [0 .. (rows - 1)]
 
 renderTileMap :: SDL.Renderer -> TileMap -> Vector2d -> IO [()]
-renderTileMap renderer (TileMap {texture, tiles, width, height}) (V2 cameraX cameraY) =
+renderTileMap renderer TileMap {texture, tiles, width, height} (V2 cameraX cameraY) =
   let xCoordinates' = map fromIntegral $ xCoordinates width height
       yCoordinates' = map fromIntegral $ yCoordinates width height
       tile x y = SDL.Rectangle (P $ V2 x y) (V2 tileWidth tileHeight)
       clipX tileNr = fromIntegral (tileNr `mod` tilesPerRow) * tileWidth
       clipY tileNr = fromIntegral (tileNr `div` tilesPerRow) * tileHeight
       clip tileNr = tile (clipX tileNr) (clipY tileNr)
-      destX x = x * tileWidth - (round cameraX)
-      destY y = y * tileHeight - (round cameraY)
+      destX x = x * tileWidth - round cameraX
+      destY y = y * tileHeight - round cameraY
       dest x y = tile (destX x) (destY y)
       isEmptyTile (_, _, tile) = tile == Tile.Air
       copy coord =
@@ -348,11 +347,11 @@ renderPlayerTime renderer game tick =
           then renderText' (formatTime $ tick - fromIntegral begin) 50 100
           else when (finish >= 0) $
                renderText'
-                 ("Finished in: " ++ (formatTime $ fromIntegral finish))
+                 ("Finished in: " ++ formatTime (fromIntegral finish))
                  50
                  100
         when (best >= 0) $
-          renderText' ("Best time: " ++ (formatTime $ fromIntegral best)) 50 150
+          renderText' ("Best time: " ++ formatTime (fromIntegral best)) 50 150
 
 renderGame :: SDL.Renderer -> Game -> Tick -> IO ()
 renderGame renderer game@Game {player, tileMap, camera} tick = do
@@ -369,7 +368,7 @@ clamp :: (Ord a) => a -> a -> a -> a
 clamp mn mx = max mn . min mx
 
 physics :: [Input] -> Game -> Game
-physics inputs game@(Game {player, tileMap}) =
+physics inputs game@Game {player, tileMap} =
   let player' =
         if Restart `elem` inputs
           then restartPlayer player
@@ -473,7 +472,7 @@ main = do
   defaultTileMap <-
     getDataFileName "default.map" >>= readFile >>= return <$> readTileMap
   SDL.Font.initialize
-  font <- getDataFileName "DejaVuSans.ttf" >>= (flip SDL.Font.load $ 28) -- Pt size for retina screen. :<
+  font <- getDataFileName "DejaVuSans.ttf" >>= flip SDL.Font.load 28 -- Pt size for retina screen. :<
   let game =
         Game
         { player = createPlayer playerTexture
