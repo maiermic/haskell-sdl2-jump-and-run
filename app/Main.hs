@@ -149,50 +149,50 @@ renderTee renderer texture position =
   let (P (V2 x y)) = position
       backFeetShadow =
         CopyExData
-        { source = SDL.Rectangle (P $ V2 192 64) (V2 64 32)
-        , destination = SDL.Rectangle (P $ V2 (x - 60) y) (V2 96 48)
+        { source = rect 192 64 64 32
+        , destination = rect (x - 60) y 96 48
         , flips = flipNone
         }
       bodyShadow =
         CopyExData
-        { source = SDL.Rectangle (P $ V2 96 0) (V2 96 96)
-        , destination = SDL.Rectangle (P $ V2 (x - 48) (y - 48)) (V2 96 96)
+        { source = rect 96 0 96 96
+        , destination = rect (x - 48) (y - 48) 96 96
         , flips = flipNone
         }
       frontFeetShadow =
         CopyExData
-        { source = SDL.Rectangle (P $ V2 192 64) (V2 64 32)
-        , destination = SDL.Rectangle (P $ V2 (x - 36) y) (V2 96 48)
+        { source = rect 192 64 64 32
+        , destination = rect (x - 36) y 96 48
         , flips = flipNone
         }
       backFeet =
         CopyExData
-        { source = SDL.Rectangle (P $ V2 192 32) (V2 64 32)
-        , destination = SDL.Rectangle (P $ V2 (x - 60) y) (V2 96 48)
+        { source = rect 192 32 64 32
+        , destination = rect (x - 60) y 96 48
         , flips = flipNone
         }
       body =
         CopyExData
-        { source = SDL.Rectangle (P $ V2 0 0) (V2 96 96)
-        , destination = SDL.Rectangle (P $ V2 (x - 48) (y - 48)) (V2 96 96)
+        { source = rect 0 0 96 96
+        , destination = rect (x - 48) (y - 48) 96 96
         , flips = flipNone
         }
       frontFeet =
         CopyExData
-        { source = SDL.Rectangle (P $ V2 192 32) (V2 64 32)
-        , destination = SDL.Rectangle (P $ V2 (x - 36) y) (V2 96 48)
+        { source = rect 192 32 64 32
+        , destination = rect (x - 36) y 96 48
         , flips = flipNone
         }
       leftEye =
         CopyExData
-        { source = SDL.Rectangle (P $ V2 64 96) (V2 32 32)
-        , destination = SDL.Rectangle (P $ V2 (x - 18) (y - 21)) (V2 36 36)
+        { source = rect 64 96 32 32
+        , destination = rect (x - 18) (y - 21) 36 36
         , flips = flipNone
         }
       rightEye =
         CopyExData
-        { source = SDL.Rectangle (P $ V2 64 96) (V2 32 32)
-        , destination = SDL.Rectangle (P $ V2 (x - 6) (y - 21)) (V2 36 36)
+        { source = rect 64 96 32 32
+        , destination = rect (x - 6) (y - 21) 36 36
         , flips = flipHorizontal
         }
       bodyParts =
@@ -228,7 +228,7 @@ renderTileMap :: SDL.Renderer -> TileMap -> Vector2d -> IO [()]
 renderTileMap renderer TileMap {texture, tiles, width, height} (V2 cameraX cameraY) =
   let xCoordinates' = map fromIntegral $ xCoordinates width height
       yCoordinates' = map fromIntegral $ yCoordinates width height
-      tile x y = SDL.Rectangle (P $ V2 x y) (V2 tileWidth tileHeight)
+      tile x y = rect x y tileWidth tileHeight
       clipX tileNr = fromIntegral (tileNr `mod` tilesPerRow) * tileWidth
       clipY tileNr = fromIntegral (tileNr `div` tilesPerRow) * tileHeight
       clip tileNr = tile (clipX tileNr) (clipY tileNr)
