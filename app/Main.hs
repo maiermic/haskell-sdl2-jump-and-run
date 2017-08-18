@@ -472,7 +472,7 @@ main = do
   defaultTileMap <-
     getDataFileName "default.map" >>= readFile >>= return <$> readTileMap
   SDL.Font.initialize
-  font <- getDataFileName "DejaVuSans.ttf" >>= flip SDL.Font.load 28 -- Pt size for retina screen. :<
+  font <- getDataFileName "DejaVuSans.ttf" >>= flip SDL.Font.load 28
   let game =
         Game
         { player = createPlayer playerTexture
