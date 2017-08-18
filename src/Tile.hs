@@ -1,6 +1,6 @@
 module Tile
-    ( Tile(..)
-    ) where
+  ( Tile(..)
+  ) where
 
 import Data.Maybe (fromJust, fromMaybe)
 import Data.Tuple (swap)
@@ -13,12 +13,9 @@ data Tile
   deriving (Eq, Show)
 
 instance Enum Tile where
-    fromEnum (Unknown tileNr) = tileNr
-    fromEnum tile = fromJust . flip lookup tileTable $ tile
-    toEnum tileNr = fromMaybe (Unknown tileNr) $ lookup tileNr (map swap tileTable)
+  fromEnum (Unknown tileNr) = tileNr
+  fromEnum tile = fromJust . flip lookup tileTable $ tile
+  toEnum tileNr =
+    fromMaybe (Unknown tileNr) $ lookup tileNr (map swap tileTable)
 
-tileTable =
-  [ (Air, 0)
-  , (Start, 78)
-  , (Finish, 110)
-  ]
+tileTable = [(Air, 0), (Start, 78), (Finish, 110)]
