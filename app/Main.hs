@@ -6,6 +6,7 @@
 
 module Main where
 
+import Control.Exception (bracket_, finally)
 import Tile (Tile(..))
 import TileMap (TileMap(..), readTileMap)
 
@@ -437,66 +438,66 @@ logic tick game@Game {tileMap, player} =
   in game
      {player = player {time = updateTime (getTile tileMap px py) tick time}}
 
+defer = flip finally
+
 main :: IO ()
 main = do
   SDL.initialize [SDL.InitVideo, SDL.InitTimer, SDL.InitEvents]
-  -- ensure render quality
-  SDL.HintRenderScaleQuality $= SDL.ScaleLinear
-  do renderQuality <- SDL.get SDL.HintRenderScaleQuality
-     when (renderQuality /= SDL.ScaleLinear) $
-       putStrLn "Warning: Linear texture filtering not enabled!"
-  window <-
-    SDL.createWindow
-      "Our own 2D platformer"
-      SDL.defaultWindow
-      { SDL.windowPosition = SDL.Centered
-      , SDL.windowInitialSize = V2 screenWidth screenHeight
-      }
-  SDL.showWindow window
-  renderer <-
-    SDL.createRenderer
-      window
-      (-1)
-      SDL.RendererConfig
-      { SDL.rendererType = SDL.AcceleratedVSyncRenderer
-      , SDL.rendererTargetTexture = True
-      }
-  SDL.rendererDrawColor renderer $= rgb 110 132 174
-  playerTexture <- loadTexture renderer "player.png"
-  tileMapTexture <- loadTexture renderer "grass.png"
-  defaultTileMap <-
-    getDataFileName "default.map" >>= readFile >>= return <$> readTileMap
-  SDL.Font.initialize
-  font <- getDataFileName "DejaVuSans.ttf" >>= flip SDL.Font.load 28
-  let game =
-        Game
-        { player = createPlayer playerTexture
-        , tileMap = defaultTileMap {texture = tileMapTexture}
-        , camera = V2 0 0
-        , font
+  defer SDL.quit $ do
+    SDL.HintRenderScaleQuality $= SDL.ScaleLinear
+    do renderQuality <- SDL.get SDL.HintRenderScaleQuality
+       when (renderQuality /= SDL.ScaleLinear) $
+         putStrLn "Warning: Linear texture filtering not enabled!"
+    window <-
+      SDL.createWindow
+        "Our own 2D platformer"
+        SDL.defaultWindow
+        { SDL.windowPosition = SDL.Centered
+        , SDL.windowInitialSize = V2 screenWidth screenHeight
         }
-      loop game keysDown lastTime = do
-        events <- map SDL.eventPayload <$> SDL.pollEvents
-        let pressedKeys = mapMaybe toPressedKey events
-        let releasedKeys = mapMaybe toReleasedKey events
-        let keysDown' = (keysDown ++ pressedKeys) `without` releasedKeys
-        let inputs = map toInput keysDown'
-        let quit = (SDL.QuitEvent `elem` events) || (Quit `elem` inputs)
-        currentTime <- SDL.Raw.getTicks
-        let dt = currentTime - lastTime
-        let tickTime = 1000 `div` ticksPerSecond
-        let tick = currentTime `div` tickTime
-        if dt > tickTime
-          then do
-            let newGame = logic tick $ moveCamera $ physics inputs game
-            renderGame renderer newGame tick
-            unless quit $ loop newGame keysDown' (lastTime + tickTime)
-          else do
-            SDL.delay 1
-            unless quit $ loop game keysDown' lastTime
-  startTime <- SDL.Raw.getTicks
-  loop game [] startTime
-  SDL.Font.quit
-  SDL.destroyRenderer renderer
-  SDL.destroyWindow window
-  SDL.quit
+    defer (SDL.destroyWindow window) $ do
+      SDL.showWindow window
+      renderer <-
+        SDL.createRenderer
+          window
+          (-1)
+          SDL.RendererConfig
+          { SDL.rendererType = SDL.AcceleratedVSyncRenderer
+          , SDL.rendererTargetTexture = True
+          }
+      defer (SDL.destroyRenderer renderer) $ do
+        SDL.rendererDrawColor renderer $= rgb 110 132 174
+        playerTexture <- loadTexture renderer "player.png"
+        tileMapTexture <- loadTexture renderer "grass.png"
+        defaultTileMap <-
+          getDataFileName "default.map" >>= readFile >>= return <$> readTileMap
+        bracket_ SDL.Font.initialize SDL.Font.quit $ do
+          font <- getDataFileName "DejaVuSans.ttf" >>= flip SDL.Font.load 28
+          let game =
+                Game
+                { player = createPlayer playerTexture
+                , tileMap = defaultTileMap {texture = tileMapTexture}
+                , camera = V2 0 0
+                , font
+                }
+              loop game keysDown lastTime = do
+                events <- map SDL.eventPayload <$> SDL.pollEvents
+                let pressedKeys = mapMaybe toPressedKey events
+                let releasedKeys = mapMaybe toReleasedKey events
+                let keysDown' = (keysDown ++ pressedKeys) `without` releasedKeys
+                let inputs = map toInput keysDown'
+                let quit = (SDL.QuitEvent `elem` events) || (Quit `elem` inputs)
+                currentTime <- SDL.Raw.getTicks
+                let dt = currentTime - lastTime
+                let tickTime = 1000 `div` ticksPerSecond
+                let tick = currentTime `div` tickTime
+                if dt > tickTime
+                  then do
+                    let newGame = logic tick $ moveCamera $ physics inputs game
+                    renderGame renderer newGame tick
+                    unless quit $ loop newGame keysDown' (lastTime + tickTime)
+                  else do
+                    SDL.delay 1
+                    unless quit $ loop game keysDown' lastTime
+          startTime <- SDL.Raw.getTicks
+          loop game [] startTime
